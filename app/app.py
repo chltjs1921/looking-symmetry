@@ -480,10 +480,10 @@ with gr.Blocks(title=APP_TITLE) as demo:
                     value=DEFAULT_TOLERANCE,
                     step=0.05,
                     label="허용 오차 / Tolerance",
-                )
+            )
             operation_picker = gr.Dropdown(
                 choices=teaching_operation_choices(),
-                label="Viewer 조작 / Viewer operation",
+                label="확인할 대칭 조작 / Symmetry operation to inspect",
                 value="추천 조작 / Best teaching operation",
             )
             analyze_button = gr.Button("점군 분석 / Analyze point group", variant="primary")

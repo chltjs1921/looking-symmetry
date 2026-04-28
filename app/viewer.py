@@ -113,6 +113,12 @@ def _as_iframe(inner_html: str) -> str:
 def _viewer_frame(demonstration: dict, iframe: str, language: str) -> str:
     ko = _is_korean(language)
     title = "왜 이것이 대칭 조작인가?" if ko else "Why this operation is symmetry"
+    current_label = "현재 확인 중" if ko else "Now inspecting"
+    switch_hint = (
+        "다른 조작은 왼쪽의 '확인할 대칭 조작' 메뉴에서 하나씩 바꿔 볼 수 있습니다."
+        if ko
+        else "Use the operation menu on the left to inspect one symmetry operation at a time."
+    )
     legend_axis = "주축" if ko else "principal axis"
     legend_secondary = "보조축" if ko else "secondary axis"
     legend_plane = "거울면" if ko else "mirror plane"
@@ -128,6 +134,7 @@ def _viewer_frame(demonstration: dict, iframe: str, language: str) -> str:
         ".viewer-teaching-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 14px;border-bottom:1px solid #e5e7eb;}"
         ".viewer-teaching-title{font-size:15px;font-weight:900;color:#111827;margin:0;}"
         ".viewer-teaching-note{font-size:13px;line-height:1.45;color:#4b5563;margin:4px 0 0;}"
+        ".viewer-teaching-hint{font-size:12px;line-height:1.4;color:#6b7280;margin:7px 0 0;}"
         ".viewer-teaching-badge{flex:0 0 auto;border-radius:999px;background:#f3e8ff;color:#6d28d9;padding:5px 9px;font-size:12px;font-weight:900;}"
         ".viewer-teaching-legend{display:flex;flex-wrap:wrap;gap:8px;padding:10px 14px;border-top:1px solid #e5e7eb;color:#4b5563;font-size:12px;}"
         ".viewer-dot{display:inline-block;width:10px;height:10px;border-radius:999px;margin-right:5px;vertical-align:-1px;}"
@@ -137,8 +144,9 @@ def _viewer_frame(demonstration: dict, iframe: str, language: str) -> str:
         "<div>"
         f"<p class='viewer-teaching-title'>{escape(title)}</p>"
         f"<p class='viewer-teaching-note'>{escape(demonstration['explanation'])}</p>"
+        f"<p class='viewer-teaching-hint'>{escape(switch_hint)}</p>"
         "</div>"
-        f"<div class='viewer-teaching-badge'>{escape(demonstration['title'])}</div>"
+        f"<div class='viewer-teaching-badge'>{escape(current_label)}: {escape(_operation_title(demonstration['title'], language))}</div>"
         "</div>"
         f"{iframe}"
         "<div class='viewer-teaching-legend'>"
@@ -322,6 +330,20 @@ def _operation_key(requested: str) -> str:
     if "secondary" in text or "보조" in text:
         return "secondary"
     return text
+
+
+def _operation_title(title: str, language: str) -> str:
+    if not _is_korean(language):
+        return title
+    if title.startswith("Principal rotation"):
+        return title.replace("Principal rotation", "주축 회전")
+    translations = {
+        "Mirror plane": "거울면",
+        "Inversion center": "반전 중심",
+        "Secondary C2 rotation": "보조 C2 회전",
+        "Identity": "항등 조작",
+    }
+    return translations.get(title, title)
 
 
 def _is_korean(language: str) -> bool:

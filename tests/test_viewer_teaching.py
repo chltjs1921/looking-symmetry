@@ -1,6 +1,6 @@
 from app.molecule import build_geometry
 from app.symmetry import analyze_point_group
-from app.viewer import _operation_demonstration, _overlay_profile, teaching_operation_choices
+from app.viewer import _operation_demonstration, _overlay_profile, _viewer_frame, teaching_operation_choices
 
 
 def test_viewer_operation_choices_include_student_facing_operations():
@@ -34,3 +34,15 @@ def test_operation_demonstration_defaults_to_korean():
     demonstration = _operation_demonstration(geometry, symmetry, profile, "거울면 / Mirror plane")
 
     assert "거울면" in demonstration["explanation"]
+
+
+def test_viewer_frame_prompts_one_operation_at_a_time():
+    html = _viewer_frame(
+        {"title": "Mirror plane", "explanation": "설명"},
+        "<iframe></iframe>",
+        "한국어",
+    )
+
+    assert "현재 확인 중" in html
+    assert "하나씩 바꿔 볼 수 있습니다" in html
+    assert "거울면" in html
