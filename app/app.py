@@ -392,7 +392,7 @@ def analyze(raw_input: str, tolerance: float, operation_mode: str, language: str
         return f"<h3>Analysis failed</h3><p>{escape(str(exc))}</p>", "", "", ""
 
 
-with gr.Blocks(title=APP_TITLE, theme=gr.themes.Soft()) as demo:
+with gr.Blocks(title=APP_TITLE) as demo:
     intro_output = gr.HTML(render_student_intro("한국어"))
     with gr.Row():
         with gr.Column(scale=5):
