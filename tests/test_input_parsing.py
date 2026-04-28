@@ -86,3 +86,5 @@ def test_result_panel_defaults_to_korean_copy():
     html = render_result_panel(Result(), Geometry())
     assert "점군" in html
     assert "전체 결정 트리" in html
+    assert "분자가 선형인가?" in html
+    assert "예" in html

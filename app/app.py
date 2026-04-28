@@ -150,7 +150,7 @@ def localized_point_group_guide(point_group: str, language: str = "한국어") -
 
 def render_decision_tree(symmetry, language: str = "한국어") -> str:
     active_ids = _active_tree_ids(symmetry.point_group)
-    tree_html = _render_tree_node(_full_decision_tree(), active_ids)
+    tree_html = _render_tree_node(_full_decision_tree(), active_ids, language=language)
     title = "전체 결정 트리" if is_korean(language) else "Full decision tree"
     caption = (
         f"주요 분기 전체를 보여줍니다. 강조된 경로가 <b>{escape(symmetry.point_group)}</b>로 가는 길입니다."
@@ -188,14 +188,14 @@ def render_decision_tree(symmetry, language: str = "한국어") -> str:
     )
 
 
-def _render_tree_node(node: dict, active_ids: set[str], edge: str | None = None) -> str:
+def _render_tree_node(node: dict, active_ids: set[str], edge: str | None = None, language: str = "한국어") -> str:
     node_id = node["id"]
     active = node_id in active_ids
     edge_html = ""
     if edge is not None:
         edge_class = _edge_class(edge)
         active_edge = " active" if active else ""
-        edge_html = f"<span class='tree-edge {edge_class}{active_edge}'>{escape(edge)}</span>"
+        edge_html = f"<span class='tree-edge {edge_class}{active_edge}'>{escape(_tree_text(edge, language))}</span>"
 
     card_class = "tree-card active" if active else "tree-card"
     if "result" in node:
@@ -203,12 +203,12 @@ def _render_tree_node(node: dict, active_ids: set[str], edge: str | None = None)
         content = f"<div class='{result_class}'>{escape(node['result'])}</div>"
     else:
         content = (
-            f"<div class='tree-question'>{escape(node['question'])}</div>"
-            f"<div class='tree-note'>{escape(node.get('note', ''))}</div>"
+            f"<div class='tree-question'>{escape(_tree_text(node['question'], language))}</div>"
+            f"<div class='tree-note'>{escape(_tree_text(node.get('note', ''), language))}</div>"
         )
 
     children = "".join(
-        _render_tree_node(child, active_ids, branch)
+        _render_tree_node(child, active_ids, branch, language)
         for branch, child in node.get("branches", [])
     )
     children_html = f"<ul class='tree-children'>{children}</ul>" if children else ""
@@ -221,6 +221,49 @@ def _render_tree_node(node: dict, active_ids: set[str], edge: str | None = None)
         f"{children_html}"
         "</li>"
     )
+
+
+def _tree_text(text: str, language: str = "한국어") -> str:
+    if not is_korean(language):
+        return text
+    translations = {
+        "Is the molecule linear?": "분자가 선형인가?",
+        "Linear molecules use infinite-axis point groups.": "선형 분자는 무한 회전축을 가진 점군을 사용합니다.",
+        "Is there an inversion center, or are both ends equivalent?": "반전 중심이 있거나 양쪽 끝이 서로 동등한가?",
+        "CO2 follows Yes; HCl follows No.": "CO2는 Yes, HCl은 No에 해당합니다.",
+        "Is it a special high-symmetry shape?": "특별한 고대칭 구조인가?",
+        "Tetrahedral, octahedral, and related shapes branch here.": "정사면체, 정팔면체 같은 구조는 여기에서 갈라집니다.",
+        "Which high-symmetry shape is it?": "어떤 고대칭 구조인가?",
+        "Use the molecular geometry, not only one axis.": "축 하나만 보지 말고 전체 분자 기하를 봅니다.",
+        "Is there a proper rotation axis Cn?": "고유 회전축 Cn이 있는가?",
+        "Find the highest-order axis first.": "가장 차수가 높은 회전축을 먼저 찾습니다.",
+        "Any mirror plane or inversion center?": "거울면이나 반전 중심이 있는가?",
+        "These are the low-symmetry non-rotational cases.": "회전축이 없는 낮은 대칭의 경우입니다.",
+        "What is the highest-order Cn axis?": "가장 차수가 높은 Cn 축은 무엇인가?",
+        "This determines the number in Cn or Dn.": "이 값이 Cn 또는 Dn의 n을 결정합니다.",
+        "Are there C2 axes perpendicular to the C2 axis?": "C2 축에 수직인 C2 축들이 있는가?",
+        "Are there C2 axes perpendicular to the C3 axis?": "C3 축에 수직인 C2 축들이 있는가?",
+        "Are there C2 axes perpendicular to the C4 axis?": "C4 축에 수직인 C2 축들이 있는가?",
+        "Are there C2 axes perpendicular to the C6 axis?": "C6 축에 수직인 C2 축들이 있는가?",
+        "Are there C2 axes perpendicular to the Cn axis?": "Cn 축에 수직인 C2 축들이 있는가?",
+        "Yes means D family; No means C family.": "Yes이면 D 계열, No이면 C 계열입니다.",
+        "What extra element is present?": "추가로 어떤 대칭 요소가 있는가?",
+        "Vertical planes give Cnv; horizontal planes give Cnh.": "수직 거울면은 Cnv, 수평 거울면은 Cnh를 만듭니다.",
+        "Horizontal planes give Dnh; dihedral planes give Dnd.": "수평 거울면은 Dnh, 이면각 거울면은 Dnd를 만듭니다.",
+        "Yes": "예",
+        "No": "아니오",
+        "Tetrahedral": "정사면체",
+        "Octahedral": "정팔면체",
+        "Mirror plane": "거울면",
+        "Inversion center": "반전 중심",
+        "Neither": "둘 다 없음",
+        "Other Cn": "기타 Cn",
+        "vertical mirror": "수직 거울면",
+        "horizontal mirror": "수평 거울면",
+        "dihedral mirror": "이면각 거울면",
+        "none": "없음",
+    }
+    return translations.get(text, text)
 
 
 def _edge_class(edge: str) -> str:
