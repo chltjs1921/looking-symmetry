@@ -1,0 +1,2 @@
+"""Looking Symmetry application package."""
+
