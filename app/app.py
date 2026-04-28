@@ -11,6 +11,7 @@ from .symmetry import analyze_point_group, point_group_guide
 from .viewer import render_viewer, teaching_operation_choices
 
 LANGUAGE_CHOICES = ["한국어", "English"]
+FEEDBACK_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdNcry-R4oqNx6AdtbTq-KTC91EA97k1J35d5uiRNqt9RoWFw/viewform?usp=publish-editor"
 
 
 def is_korean(language: str) -> bool:
@@ -59,6 +60,23 @@ def render_student_intro(language: str = "한국어") -> str:
         "</div>"
         f"<p class='student-feedback'>{escape(feedback)}</p>"
         "</section>"
+    )
+
+
+def render_feedback_button() -> str:
+    return (
+        "<div style='margin-top:12px;padding:12px;border:1px solid #dde3f8;border-radius:8px;background:#fff'>"
+        f"<a href='{escape(FEEDBACK_FORM_URL, quote=True)}' target='_blank' rel='noopener noreferrer' "
+        "style='display:inline-block;width:100%;box-sizing:border-box;text-align:center;padding:10px 14px;"
+        "border-radius:8px;background:#4f46e5;color:white;font-weight:800;text-decoration:none'>"
+        "피드백 남기기 / Leave feedback"
+        "</a>"
+        "<p style='margin:8px 0 0;color:#4b5563;font-size:13px;line-height:1.4'>"
+        "앱을 사용한 뒤 헷갈린 점이나 개선 의견을 남겨 주세요."
+        "<br>"
+        "After trying the app, please share what was confusing or useful."
+        "</p>"
+        "</div>"
     )
 
 
@@ -470,6 +488,7 @@ with gr.Blocks(title=APP_TITLE) as demo:
             )
             analyze_button = gr.Button("점군 분석 / Analyze point group", variant="primary")
             xyz_output = gr.Textbox(label="생성된 XYZ / Generated XYZ", lines=8)
+            gr.HTML(render_feedback_button())
         with gr.Column(scale=7):
             result_output = gr.HTML(label="점군 / Point group")
             detail_output = gr.Markdown()
