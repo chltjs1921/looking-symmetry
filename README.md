@@ -1,3 +1,14 @@
+---
+title: Looking Symmetry
+emoji: 🧪
+colorFrom: blue
+colorTo: indigo
+sdk: gradio
+app_file: app.py
+pinned: false
+license: mit
+---
+
 # Looking Symmetry
 
 분자 점군과 대칭 조작을 3D로 직관적으로 확인해 보는 학습용 프로토타입입니다. 학생 피드백을 받기 위한 버전이며, 완성된 교재나 정밀 분석 도구가 아닙니다.
