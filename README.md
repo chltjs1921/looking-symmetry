@@ -45,6 +45,8 @@ Recommended public demo setup:
 
 After deployment, share the Hugging Face Space URL with students. They should not need Python, Git, or local installation.
 
+For this repository's exact GitHub and Hugging Face push workflow, see [DEPLOY.md](DEPLOY.md). Important: the local branch is `master`, but the Hugging Face Space deploys from `main`, so publish with `git push space master:main`.
+
 ## What It Does
 
 - Accepts built-in molecule names/formulas, SMILES strings, or XYZ coordinates.
