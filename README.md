@@ -20,9 +20,10 @@ Looking Symmetry is a prototype teaching app for molecular point groups. It clas
 앱을 처음 열면 직접 분자를 입력하기보다 내장 예시부터 사용해 주세요.
 
 1. `Water / H2O`, `Ammonia / NH3`, `Carbon dioxide / CO2`, `Benzene / C6H6` 중 하나를 고릅니다.
-2. viewer에서 왼쪽 원래 분자와 오른쪽 대칭 조작 후 분자를 비교합니다.
-3. `Viewer 조작 / Viewer operation`을 바꿔 회전, 거울면, 반전 중심을 확인합니다.
-4. 조작 후에도 원자 배열이 같아 보이는지 판단합니다.
+2. viewer 위의 `현재 확인 중 / Now inspecting` 메뉴에서 확인할 대칭 조작을 고릅니다.
+3. `대칭 조작 진행률 / Symmetry operation progress (%)` 슬라이더를 0%에서 100%까지 움직이며 오른쪽 미리보기를 확인합니다.
+4. 왼쪽 원래 분자와 오른쪽 대칭 조작 미리보기를 비교합니다.
+5. 조작 후에도 원자 배열이 같아 보이는지 판단합니다.
 
 피드백으로 알고 싶은 점:
 
@@ -47,12 +48,25 @@ After deployment, share the Hugging Face Space URL with students. They should no
 ## What It Does
 
 - Accepts built-in molecule names/formulas, SMILES strings, or XYZ coordinates.
+- Converts selected small-molecule formulas such as `HCN` into SMILES before using the RDKit pipeline.
 - Generates 3D coordinates from SMILES with RDKit.
 - Classifies the molecular point group with `pymatgen.symmetry.analyzer.PointGroupAnalyzer`.
 - Renders the molecule with `py3Dmol`.
-- Shows symmetry operations as a before/after 3D comparison.
+- Shows symmetry operations as a fixed original molecule plus a progress-controlled operation preview.
+- Uses staged previews for mirror planes and inversion centers to emphasize atom correspondences.
 - Opens the full point-group decision tree from the point-group badge.
 - Supports Korean and English UI text.
+
+## Update Notes
+
+### 2026-05-01
+
+- Added a split viewer: the left panel shows the fixed original molecule, and the right panel shows the selected operation preview.
+- Moved the symmetry operation menu and progress slider directly above the viewer for a clearer learning flow.
+- Added progress-controlled previews for rotations, mirror planes, and inversion centers.
+- Changed mirror-plane and inversion-center previews to staged correspondence views instead of simple motion through a plane or point.
+- Added safe handling for empty progress input and reset progress to 0% when analyzing a new molecule or changing the inspected operation.
+- Added small-molecule formula handling for `HCN` through the RDKit SMILES pipeline rather than as a built-in example.
 
 ## Run Locally
 
@@ -77,7 +91,7 @@ Built-in examples work by name or formula:
 
 `water`, `H2O`, `ammonia`, `NH3`, `methane`, `CH4`, `benzene`, `C6H6`, `BF3`, `CO2`, `SF6`, `HCl`, `N2`, `C2H2`, `CH2O`, `PCl5`, `XeF4`
 
-For molecules outside the built-in examples, enter a SMILES string:
+For molecules outside the built-in examples, enter a SMILES string. A small set of clear educational formulas such as `HCN` is also normalized into SMILES before RDKit generates the 3D coordinates.
 
 ```text
 c1ccccc1

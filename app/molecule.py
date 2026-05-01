@@ -1,11 +1,26 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Literal
 
 from .examples import resolve_example
 
 InputKind = Literal["smiles", "xyz"]
+
+FORMULA_SMILES = {
+    "HCN": "C#N",
+    "CO": "[C-]#[O+]",
+    "NO": "N=O",
+    "O2": "O=O",
+    "F2": "FF",
+    "CL2": "ClCl",
+    "BR2": "BrBr",
+    "I2": "II",
+    "HF": "F",
+    "HBR": "Br",
+    "HI": "I",
+}
 
 
 @dataclass(frozen=True)
@@ -35,6 +50,10 @@ def normalize_input(raw_input: str) -> tuple[str, InputKind, str]:
 
     if _looks_like_xyz(text):
         return text, "xyz", "XYZ input"
+
+    formula_smiles = formula_to_smiles(text)
+    if formula_smiles:
+        return formula_smiles, "smiles", text
 
     return text, "smiles", text
 
@@ -66,6 +85,13 @@ def _line_has_atom_and_xyz(line: str) -> bool:
     except ValueError:
         return False
     return parts[0][0].isalpha()
+
+
+def formula_to_smiles(text: str) -> str | None:
+    formula = text.strip()
+    if not re.fullmatch(r"(?:[A-Z][a-z]?\d*)+", formula):
+        return None
+    return FORMULA_SMILES.get(formula.upper())
 
 
 def parse_xyz(text: str, source: str = "XYZ input") -> MolecularGeometry:

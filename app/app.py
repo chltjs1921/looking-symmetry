@@ -413,11 +413,11 @@ def _cn_family(label: str, c_result: str, d_result: str) -> dict:
     }
 
 
-def analyze(raw_input: str, tolerance: float, operation_mode: str, language: str):
+def analyze(raw_input: str, tolerance: float, operation_mode: str, operation_progress: float, language: str):
     try:
         geometry = build_geometry(raw_input)
         symmetry = analyze_point_group(geometry, tolerance=tolerance)
-        viewer = render_viewer(geometry, symmetry, operation_mode, language)
+        viewer = render_viewer(geometry, symmetry, operation_mode, language, operation_progress)
         elements = "\n".join(
             f"- **{element.label}**: {element.explanation}" for element in symmetry.elements
         )
@@ -453,6 +453,10 @@ def analyze(raw_input: str, tolerance: float, operation_mode: str, language: str
         return f"<h3>Analysis failed</h3><p>{escape(str(exc))}</p>", "", "", ""
 
 
+def reset_operation_progress():
+    return gr.update(value=0)
+
+
 with gr.Blocks(title=APP_TITLE) as demo:
     intro_output = gr.HTML(render_student_intro("한국어"))
     with gr.Row():
@@ -481,28 +485,51 @@ with gr.Blocks(title=APP_TITLE) as demo:
                     step=0.05,
                     label="허용 오차 / Tolerance",
             )
-            operation_picker = gr.Dropdown(
-                choices=teaching_operation_choices(),
-                label="확인할 대칭 조작 / Symmetry operation to inspect",
-                value="추천 조작 / Best teaching operation",
-            )
             analyze_button = gr.Button("점군 분석 / Analyze point group", variant="primary")
             xyz_output = gr.Textbox(label="생성된 XYZ / Generated XYZ", lines=8)
             gr.HTML(render_feedback_button())
         with gr.Column(scale=7):
             result_output = gr.HTML(label="점군 / Point group")
             detail_output = gr.Markdown()
+            operation_picker = gr.Dropdown(
+                choices=teaching_operation_choices(),
+                label="현재 확인 중 / Now inspecting",
+                value="추천 조작 / Best teaching operation",
+            )
+            operation_progress = gr.Slider(
+                minimum=0,
+                maximum=100,
+                value=0,
+                step=5,
+                label="대칭 조작 진행률 / Symmetry operation progress (%)",
+            )
             viewer_output = gr.HTML(label="3D 대칭 viewer / 3D symmetry viewer")
 
     example_picker.change(load_example, inputs=example_picker, outputs=molecule_input)
     analyze_button.click(
+        reset_operation_progress,
+        outputs=operation_progress,
+    ).then(
         analyze,
-        inputs=[molecule_input, tolerance, operation_picker, language_picker],
+        inputs=[molecule_input, tolerance, operation_picker, operation_progress, language_picker],
         outputs=[result_output, detail_output, viewer_output, xyz_output],
     )
     operation_picker.change(
+        reset_operation_progress,
+        outputs=operation_progress,
+    ).then(
         analyze,
-        inputs=[molecule_input, tolerance, operation_picker, language_picker],
+        inputs=[molecule_input, tolerance, operation_picker, operation_progress, language_picker],
+        outputs=[result_output, detail_output, viewer_output, xyz_output],
+    )
+    operation_progress.change(
+        analyze,
+        inputs=[molecule_input, tolerance, operation_picker, operation_progress, language_picker],
+        outputs=[result_output, detail_output, viewer_output, xyz_output],
+    )
+    operation_progress.input(
+        analyze,
+        inputs=[molecule_input, tolerance, operation_picker, operation_progress, language_picker],
         outputs=[result_output, detail_output, viewer_output, xyz_output],
     )
     language_picker.change(
@@ -512,12 +539,12 @@ with gr.Blocks(title=APP_TITLE) as demo:
     )
     language_picker.change(
         analyze,
-        inputs=[molecule_input, tolerance, operation_picker, language_picker],
+        inputs=[molecule_input, tolerance, operation_picker, operation_progress, language_picker],
         outputs=[result_output, detail_output, viewer_output, xyz_output],
     )
     demo.load(
         analyze,
-        inputs=[molecule_input, tolerance, operation_picker, language_picker],
+        inputs=[molecule_input, tolerance, operation_picker, operation_progress, language_picker],
         outputs=[result_output, detail_output, viewer_output, xyz_output],
     )
 

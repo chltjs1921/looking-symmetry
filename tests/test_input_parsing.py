@@ -18,6 +18,13 @@ def test_resolves_formula_to_example_xyz():
     assert source == "Benzene / C6H6"
 
 
+def test_small_formula_maps_to_smiles_pipeline():
+    normalized, kind, source = normalize_input("HCN")
+    assert normalized == "C#N"
+    assert kind == "smiles"
+    assert source == "HCN"
+
+
 def test_parse_xyz_with_count_and_comment():
     geometry = parse_xyz(
         """3

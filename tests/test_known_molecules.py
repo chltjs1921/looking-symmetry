@@ -20,3 +20,10 @@ def test_new_linear_and_square_planar_aliases_resolve():
     for user_input, source in examples.items():
         geometry = build_geometry(user_input)
         assert geometry.source == source
+
+
+def test_hcn_formula_uses_rdkit_smiles_pipeline():
+    geometry = build_geometry("HCN")
+    assert geometry.kind == "smiles"
+    assert geometry.source == "HCN"
+    assert sorted(geometry.species) == ["C", "H", "N"]

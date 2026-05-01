@@ -35,6 +35,7 @@ def render_viewer(
     symmetry: SymmetryResult,
     operation_mode: str = "Best teaching operation",
     language: str = "한국어",
+    operation_progress: float = 100,
 ) -> str:
     try:
         import py3Dmol
@@ -45,14 +46,18 @@ def render_viewer(
             "Run <code>pip install -r requirements.txt</code> and try again.</div>"
         )
 
-    view = py3Dmol.view(width="100%", height=640)
     center = _center(geometry.coords)
     radius = _radius(geometry.coords, center)
-    separation = radius * 2.45
     profile = _overlay_profile(geometry.source, symmetry.point_group)
-    demonstration = _operation_demonstration(geometry, symmetry, profile, operation_mode, language)
+    demonstration = _operation_demonstration(
+        geometry,
+        symmetry,
+        profile,
+        operation_mode,
+        language,
+        operation_progress,
+    )
 
-    left_geometry = _shift_geometry(geometry, (-separation / 2, 0, 0), "original")
     right_geometry = _shift_geometry(
         MolecularGeometry(
             species=geometry.species,
@@ -60,20 +65,39 @@ def render_viewer(
             source=demonstration["title"],
             kind=geometry.kind,
         ),
-        (separation / 2, 0, 0),
+        (0, 0, 0),
         demonstration["title"],
     )
 
-    view.addModel(left_geometry.to_xyz(), "xyz")
-    view.setStyle({"model": 0}, {"stick": {"radius": 0.17}, "sphere": {"scale": 0.3}})
-    view.addModel(right_geometry.to_xyz(), "xyz")
-    view.setStyle({"model": 1}, {"stick": {"radius": 0.17}, "sphere": {"scale": 0.3}})
-    _add_overlays(view, left_geometry, symmetry, profile)
-    _add_demonstration_guides(view, center, radius, separation, demonstration)
-    view.zoomTo()
-    view.zoom(0.9)
-    viewer_html = _use_local_3dmol_loader(view._make_html())
-    return _viewer_frame(demonstration, _as_iframe(_inline_3dmol_loader() + viewer_html), language)
+    left_view = py3Dmol.view(width="100%", height=520)
+    _add_geometry_model(left_view, geometry)
+    _add_overlays(left_view, geometry, symmetry, profile)
+    left_view.addLabel(
+        "fixed view" if not _is_korean(language) else "고정 보기",
+        {"position": _point(_translate(center, (0, -radius * 1.08, 0))), "fontSize": 13, "fontColor": "0x111827", "backgroundOpacity": 0.7},
+    )
+    _fit_view(left_view)
+
+    right_view = py3Dmol.view(width="100%", height=520)
+    if demonstration["kind"] == "reflection":
+        _add_reflection_preview(right_view, geometry, demonstration, center, radius)
+    elif demonstration["kind"] == "inversion":
+        _add_inversion_preview(right_view, geometry, demonstration, center, radius)
+    else:
+        _add_geometry_model(right_view, right_geometry)
+    right_view.addLabel(
+        demonstration["title"],
+        {"position": _point(_translate(center, (0, -radius * 1.08, 0))), "fontSize": 13, "fontColor": PURPLE, "backgroundOpacity": 0.75},
+    )
+    _fit_view(right_view)
+
+    panes = _split_viewer_panes(
+        _as_iframe(_inline_3dmol_loader() + _use_local_3dmol_loader(left_view._make_html()), height=540),
+        _as_iframe(_inline_3dmol_loader() + _use_local_3dmol_loader(right_view._make_html()), height=540),
+        language,
+        demonstration["progress_percent"],
+    )
+    return _viewer_frame(demonstration, panes, language)
 
 
 @lru_cache(maxsize=1)
@@ -92,7 +116,97 @@ def _inline_3dmol_loader() -> str:
     )
 
 
-def _as_iframe(inner_html: str) -> str:
+def _add_geometry_model(view, geometry: MolecularGeometry, model_index: int = 0, muted: bool = False) -> None:
+    view.addModel(geometry.to_xyz(), "xyz")
+    if muted:
+        style = {
+            "stick": {"radius": 0.12, "color": "0x9ca3af", "opacity": 0.35},
+            "sphere": {"scale": 0.24, "color": "0x9ca3af", "opacity": 0.35},
+        }
+    else:
+        style = {"stick": {"radius": 0.17}, "sphere": {"scale": 0.3}}
+    view.setStyle({"model": model_index}, style)
+
+
+def _add_reflection_preview(view, geometry: MolecularGeometry, demonstration: dict, center, radius: float) -> None:
+    progress = _clamp_progress(demonstration.get("progress_percent"))
+    operation = demonstration["operation"]
+    final_geometry = MolecularGeometry(
+        species=geometry.species,
+        coords=demonstration["final_coords"],
+        source=demonstration["title"],
+        kind=geometry.kind,
+    )
+
+    _add_geometry_model(view, geometry, model_index=0, muted=progress >= 0.75)
+
+    if progress >= 0.25:
+        _add_plane_grid(view, center, radius, operation["plane"], ORANGE, "mirror plane")
+    if progress >= 0.5:
+        _add_reflection_correspondence(view, geometry.coords, final_geometry.coords, radius)
+    if progress >= 0.75:
+        _add_geometry_model(view, final_geometry, model_index=1, muted=progress < 1.0)
+
+
+def _add_inversion_preview(view, geometry: MolecularGeometry, demonstration: dict, center, radius: float) -> None:
+    progress = _clamp_progress(demonstration.get("progress_percent"))
+    final_geometry = MolecularGeometry(
+        species=geometry.species,
+        coords=demonstration["final_coords"],
+        source=demonstration["title"],
+        kind=geometry.kind,
+    )
+
+    _add_geometry_model(view, geometry, model_index=0, muted=progress >= 0.75)
+
+    if progress >= 0.25:
+        _add_inversion_center_marker(view, center, radius)
+    if progress >= 0.5:
+        _add_reflection_correspondence(view, geometry.coords, final_geometry.coords, radius)
+    if progress >= 0.75:
+        _add_geometry_model(view, final_geometry, model_index=1, muted=progress < 1.0)
+
+
+def _add_inversion_center_marker(view, center, radius: float) -> None:
+    view.addSphere(
+        {
+            "center": _point(center),
+            "radius": max(radius * 0.06, 0.1),
+            "color": RED,
+            "alpha": 0.9,
+        }
+    )
+    view.addLabel(
+        "inversion center",
+        {"position": _point(_translate(center, (0.12, 0.12, 0.12))), "fontSize": 12, "fontColor": RED, "backgroundOpacity": 0.65},
+    )
+
+
+def _add_reflection_correspondence(
+    view,
+    start_coords: list[tuple[float, float, float]],
+    end_coords: list[tuple[float, float, float]],
+    radius: float,
+) -> None:
+    for start, end in zip(start_coords, end_coords):
+        midpoint = tuple((start[index] + end[index]) / 2 for index in range(3))
+        _add_line(view, start, end, PURPLE, radius=max(radius * 0.009, 0.018), alpha=0.55)
+        view.addSphere(
+            {
+                "center": _point(midpoint),
+                "radius": max(radius * 0.025, 0.045),
+                "color": PURPLE,
+                "alpha": 0.65,
+            }
+        )
+
+
+def _fit_view(view) -> None:
+    view.zoomTo()
+    view.zoom(0.9)
+
+
+def _as_iframe(inner_html: str, height: int = 660) -> str:
     document = (
         "<!doctype html><html><head><meta charset='utf-8'>"
         "<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#ffffff;}"
@@ -104,20 +218,43 @@ def _as_iframe(inner_html: str) -> str:
     return (
         "<iframe "
         f"srcdoc=\"{escape(document, quote=True)}\" "
-        "style=\"width:100%;height:660px;border:0;display:block;background:#fff;\" "
+        f"style=\"width:100%;height:{height}px;border:0;display:block;background:#fff;\" "
         "sandbox=\"allow-scripts allow-same-origin\">"
         "</iframe>"
+    )
+
+
+def _split_viewer_panes(left_iframe: str, right_iframe: str, language: str, progress_percent: int = 100) -> str:
+    ko = _is_korean(language)
+    left_label = "Original molecule" if not ko else "원래 분자"
+    right_label = "Operation preview" if not ko else "조작 미리보기"
+    left_hint = "fixed view" if not ko else "고정 보기"
+    right_hint = f"progress {progress_percent}%" if not ko else f"진행률 {progress_percent}%"
+    return (
+        "<div class='viewer-split'>"
+        "<div class='viewer-pane viewer-pane-active'>"
+        "<div class='viewer-pane-head'>"
+        f"<span>{escape(left_label)}</span><span>{escape(left_hint)}</span>"
+        "</div>"
+        f"{left_iframe}"
+        "</div>"
+        "<div class='viewer-pane viewer-pane-static'>"
+        "<div class='viewer-pane-head'>"
+        f"<span>{escape(right_label)}</span><span>{escape(right_hint)}</span>"
+        "</div>"
+        f"{right_iframe}"
+        "</div>"
+        "</div>"
     )
 
 
 def _viewer_frame(demonstration: dict, iframe: str, language: str) -> str:
     ko = _is_korean(language)
     title = "왜 이것이 대칭 조작인가?" if ko else "Why this operation is symmetry"
-    current_label = "현재 확인 중" if ko else "Now inspecting"
     switch_hint = (
-        "다른 조작은 왼쪽의 '확인할 대칭 조작' 메뉴에서 하나씩 바꿔 볼 수 있습니다."
+        "다른 조작은 viewer 위의 '현재 확인 중' 메뉴에서 바꿔 볼 수 있습니다."
         if ko
-        else "Use the operation menu on the left to inspect one symmetry operation at a time."
+        else "Use the Now inspecting menu above the viewer to switch symmetry operations."
     )
     legend_axis = "주축" if ko else "principal axis"
     legend_secondary = "보조축" if ko else "secondary axis"
@@ -134,19 +271,27 @@ def _viewer_frame(demonstration: dict, iframe: str, language: str) -> str:
         ".viewer-teaching-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 14px;border-bottom:1px solid #e5e7eb;}"
         ".viewer-teaching-title{font-size:15px;font-weight:900;color:#111827;margin:0;}"
         ".viewer-teaching-note{font-size:13px;line-height:1.45;color:#4b5563;margin:4px 0 0;}"
+        ".viewer-teaching-steps{margin:8px 0 0 18px;padding:0;color:#4b5563;font-size:13px;line-height:1.45;}"
         ".viewer-teaching-hint{font-size:12px;line-height:1.4;color:#6b7280;margin:7px 0 0;}"
         ".viewer-teaching-badge{flex:0 0 auto;border-radius:999px;background:#f3e8ff;color:#6d28d9;padding:5px 9px;font-size:12px;font-weight:900;}"
         ".viewer-teaching-legend{display:flex;flex-wrap:wrap;gap:8px;padding:10px 14px;border-top:1px solid #e5e7eb;color:#4b5563;font-size:12px;}"
         ".viewer-dot{display:inline-block;width:10px;height:10px;border-radius:999px;margin-right:5px;vertical-align:-1px;}"
+        ".viewer-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1px;background:#e5e7eb;}"
+        ".viewer-pane{min-width:0;background:#fff;}"
+        ".viewer-pane-active iframe{pointer-events:none;}"
+        ".viewer-pane-static iframe{pointer-events:none;}"
+        ".viewer-pane-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:1px solid #e5e7eb;color:#111827;font-size:12px;font-weight:900;}"
+        ".viewer-pane-head span:last-child{color:#6b7280;font-weight:700;}"
+        "@media (max-width:760px){.viewer-split{grid-template-columns:1fr;}}"
         "</style>"
         "<section class='viewer-teaching'>"
         "<div class='viewer-teaching-head'>"
         "<div>"
         f"<p class='viewer-teaching-title'>{escape(title)}</p>"
         f"<p class='viewer-teaching-note'>{escape(demonstration['explanation'])}</p>"
+        f"{_teaching_steps(demonstration)}"
         f"<p class='viewer-teaching-hint'>{escape(switch_hint)}</p>"
         "</div>"
-        f"<div class='viewer-teaching-badge'>{escape(current_label)}: {escape(_operation_title(demonstration['title'], language))}</div>"
         "</div>"
         f"{iframe}"
         "<div class='viewer-teaching-legend'>"
@@ -158,6 +303,14 @@ def _viewer_frame(demonstration: dict, iframe: str, language: str) -> str:
         "</div>"
         "</section>"
     )
+
+
+def _teaching_steps(demonstration: dict) -> str:
+    steps = demonstration.get("steps")
+    if not steps:
+        return ""
+    items = "".join(f"<li>{escape(step)}</li>" for step in steps)
+    return f"<ul class='viewer-teaching-steps'>{items}</ul>"
 
 
 def _use_local_3dmol_loader(html: str) -> str:
@@ -205,64 +358,123 @@ def _operation_demonstration(
     profile: dict,
     operation_mode: str,
     language: str = "한국어",
+    progress_percent: float = 100,
 ) -> dict:
     operation = _choose_operation(symmetry.point_group, profile, operation_mode)
     center = _center(geometry.coords)
     coords = geometry.coords
+    progress = _clamp_progress(progress_percent)
 
-    if operation["kind"] == "rotation":
-        transformed = [
+    if operation["kind"] == "unavailable":
+        final_coords = list(coords)
+        transformed = list(coords)
+        operation_name = _operation_title(operation["title"], language)
+        if _is_korean(language):
+            explanation = (
+                f"{geometry.source}의 점군 {symmetry.point_group}에는 {operation_name} 조작이 없습니다. "
+                "오른쪽 미리보기는 원래 분자를 그대로 보여줍니다. 다른 조작을 선택하면 실제 대칭 조작을 확인할 수 있습니다."
+            )
+        else:
+            explanation = (
+                f"{geometry.source} has point group {symmetry.point_group}, which does not include {operation['title']}. "
+                "The preview keeps the molecule unchanged. Select another operation to inspect an actual symmetry operation."
+            )
+        steps = []
+    elif operation["kind"] == "rotation":
+        final_coords = [
             _rotate_about_axis(coord, center, operation["direction"], operation["angle"])
+            for coord in coords
+        ]
+        transformed = [
+            _rotate_about_axis(coord, center, operation["direction"], operation["angle"] * progress)
             for coord in coords
         ]
         if _is_korean(language):
             explanation = (
                 f"왼쪽 분자를 표시된 축 주위로 {operation['degrees']}도 회전한 모습이 오른쪽입니다. "
+                "실제 대칭 회전은 진행률 슬라이더로 확인합니다. "
                 "오른쪽의 원자 배열이 왼쪽과 같아 보이면, 이 회전은 대칭 조작입니다."
             )
         else:
             explanation = (
                 f"Rotate the left molecule by {operation['degrees']} degrees around the highlighted axis. "
+                "Use the progress slider to inspect the actual symmetry rotation. "
                 "The right molecule has the same atom pattern, so the rotation is a symmetry operation."
             )
+        steps = []
     elif operation["kind"] == "reflection":
-        transformed = [_reflect_in_plane(coord, center, operation["plane"]) for coord in coords]
+        final_coords = [_reflect_in_plane(coord, center, operation["plane"]) for coord in coords]
+        transformed = _interpolate_coords(coords, final_coords, progress)
         if _is_korean(language):
             explanation = (
-                f"왼쪽 분자를 표시된 {operation['plane']} 평면에 비친 모습이 오른쪽입니다. "
-                "각 원자가 같은 종류의 원자 자리로 옮겨가면, 이 평면은 거울면입니다."
+                f"오른쪽은 {operation['plane']} 거울면을 기준으로 원래 원자와 반사된 원자의 대응을 단계적으로 보여줍니다. "
+                "대응선의 가운데가 거울면 위에 놓이고 같은 종류의 원자로 대응되면, 이 평면은 거울면입니다."
             )
+            steps = [
+                "0%: 원래 분자",
+                "25%: 거울면 강조",
+                "50%: 원래 원자와 반사 위치를 잇는 대응선",
+                "75%: 반사된 분자를 희미하게 표시",
+                "100%: 반사 결과를 진하게 표시",
+            ]
         else:
             explanation = (
-                f"Reflect the left molecule across the highlighted {operation['plane']} plane. "
-                "Atoms land on identical atoms, so the mirror plane is a symmetry element."
+                f"The right panel stages the reflection across the highlighted {operation['plane']} plane. "
+                "Correspondence lines show equal distance to the plane and matching atom types."
             )
+            steps = [
+                "0%: original molecule",
+                "25%: mirror plane highlighted",
+                "50%: correspondence lines between original and reflected atoms",
+                "75%: reflected molecule shown as a ghost",
+                "100%: reflected result emphasized",
+            ]
     elif operation["kind"] == "inversion":
-        transformed = [_invert(coord, center) for coord in coords]
+        final_coords = [_invert(coord, center) for coord in coords]
+        transformed = _interpolate_coords(coords, final_coords, progress)
         if _is_korean(language):
             explanation = (
-                "모든 원자를 빨간 중심을 지나 반대편으로 보낸 모습이 오른쪽입니다. "
-                "각 원자가 같은 종류의 원자 자리로 옮겨가면, 그 점은 반전 중심입니다."
+                "오른쪽은 빨간 반전 중심을 기준으로 원래 원자와 반전된 원자의 대응을 단계적으로 보여줍니다. "
+                "각 대응선의 가운데가 같은 반전 중심에 놓이고 같은 종류의 원자로 대응되면, 그 점은 반전 중심입니다."
             )
+            steps = [
+                "0%: 원래 분자",
+                "25%: 반전 중심 강조",
+                "50%: 원래 원자와 반전 위치를 잇는 대응선",
+                "75%: 반전된 분자를 희미하게 표시",
+                "100%: 반전 결과를 진하게 표시",
+            ]
         else:
             explanation = (
-                "Send every atom through the red center to the opposite side. "
-                "If each atom lands on an identical atom, the center is an inversion center."
+                "The right panel stages each atom's correspondence through the red inversion center. "
+                "If each correspondence line shares the same midpoint and matching atom types, that point is an inversion center."
             )
+            steps = [
+                "0%: original molecule",
+                "25%: inversion center highlighted",
+                "50%: correspondence lines between original and inverted atoms",
+                "75%: inverted molecule shown as a ghost",
+                "100%: inverted result emphasized",
+            ]
     else:
+        final_coords = list(coords)
         transformed = list(coords)
         explanation = (
             "항등 조작은 모든 원자를 원래 자리에 그대로 둡니다."
             if _is_korean(language)
             else "The identity operation leaves every atom exactly where it started."
         )
+        steps = []
 
     return {
         "title": operation["title"],
         "kind": operation["kind"],
         "coords": transformed,
+        "final_coords": final_coords,
         "operation": operation,
+        "progress_percent": round(progress * 100),
         "explanation": explanation,
+        "steps": steps,
     }
 
 
@@ -278,7 +490,23 @@ def _choose_operation(point_group: str, profile: dict, requested: str) -> dict:
             for operation in available:
                 if operation["title"].startswith(preferred):
                     return operation
+    if requested_key in {"principal", "mirror", "inversion", "secondary"}:
+        return _unavailable_operation(requested_key)
     return available[0]
+
+
+def _unavailable_operation(requested_key: str) -> dict:
+    titles = {
+        "principal": "Principal rotation",
+        "mirror": "Mirror plane",
+        "inversion": "Inversion center",
+        "secondary": "Secondary C2 rotation",
+    }
+    return {
+        "kind": "unavailable",
+        "key": requested_key,
+        "title": titles[requested_key],
+    }
 
 
 def _available_operations(point_group: str, profile: dict) -> list[dict]:
@@ -330,6 +558,28 @@ def _operation_key(requested: str) -> str:
     if "secondary" in text or "보조" in text:
         return "secondary"
     return text
+
+
+def _clamp_progress(progress_percent: float) -> float:
+    try:
+        progress = float(progress_percent) / 100
+    except (TypeError, ValueError):
+        return 0.0
+    return min(max(progress, 0.0), 1.0)
+
+
+def _interpolate_coords(
+    start_coords: list[tuple[float, float, float]],
+    end_coords: list[tuple[float, float, float]],
+    progress: float,
+) -> list[tuple[float, float, float]]:
+    return [
+        tuple(
+            start[index] + (end[index] - start[index]) * progress
+            for index in range(3)
+        )
+        for start, end in zip(start_coords, end_coords)
+    ]
 
 
 def _operation_title(title: str, language: str) -> str:
